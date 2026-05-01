@@ -1,5 +1,5 @@
 import numpy as np
-from .network import ChaoticOscillatoryNetwork
+from network import ChaoticOscillatoryNetwork
 
 def store_patterns_hebbian(network, patterns, alpha=0.1):
     n = network.n

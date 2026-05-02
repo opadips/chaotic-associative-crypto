@@ -5,10 +5,11 @@ class CAMCCipher:
     def __init__(self, network, sync_state):
         self.network = network
         self.sync_state = np.asarray(sync_state, dtype=complex)
-        self.block_size = 4
+        self.accumulator = 0xDEADBEEF
 
     def encrypt(self, plaintext):
         self.network.set_state(self.sync_state.copy())
+        self.accumulator = 0xDEADBEEF
         data = plaintext.encode('utf-8')
         keystream = self._generate_keystream(len(data))
         encrypted = bytes(b ^ k for b, k in zip(data, keystream))
@@ -16,18 +17,24 @@ class CAMCCipher:
 
     def decrypt(self, ciphertext):
         self.network.set_state(self.sync_state.copy())
+        self.accumulator = 0xDEADBEEF
         keystream = self._generate_keystream(len(ciphertext))
         decrypted = bytes(c ^ k for c, k in zip(ciphertext, keystream))
         return decrypted.decode('utf-8', errors='replace')
 
     def _generate_keystream(self, length):
         stream = bytearray()
+        n = self.network.n
         while len(stream) < length:
             self.network.step(self.network.state)
-            raw = bytearray()
-            for val in self.network.state[:self.block_size]:
-                angle = np.angle(val)
-                normalized = int((np.mod(angle, 2 * np.pi) / (2 * np.pi)) * 256) % 256
-                raw.append(normalized)
-            stream.extend(raw)
-        return bytes(stream[:length])
+            angles = np.mod(np.angle(self.network.state), 2 * np.pi)
+            for angle in angles:
+                byte_val = int((angle / (2 * np.pi)) * 256) & 0xFF
+                self.accumulator ^= byte_val
+                self.accumulator ^= (self.accumulator >> 7)
+                self.accumulator ^= (self.accumulator << 9)
+                self.accumulator &= 0xFFFFFFFF
+                stream.append(self.accumulator & 0xFF)
+                if len(stream) >= length:
+                    return bytes(stream)
+        return bytes(stream)

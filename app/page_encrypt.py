@@ -3,8 +3,6 @@ import numpy as np
 from network import ChaoticOscillatoryNetwork
 from crypto import CAMCCipher
 
-st.set_page_config(page_title="Encrypt", layout="wide")
-
 st.title("Encrypt / Decrypt")
 
 N_NEURONS = 128

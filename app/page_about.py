@@ -1,7 +1,5 @@
 import streamlit as st
 
-st.set_page_config(page_title="Design", layout="wide")
-
 st.title("Design & Constraints")
 
 st.header("What this is")

@@ -5,8 +5,6 @@ from network import ChaoticOscillatoryNetwork
 from crypto import CAMCCipher
 from dynamics import entropy, bit_flip_analysis, autocorrelation
 
-st.set_page_config(page_title="Analysis", layout="wide")
-
 st.title("Analysis")
 
 N_NEURONS = 128

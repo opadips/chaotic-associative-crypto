@@ -5,60 +5,79 @@ from block_cipher import CAMCBlockCipher
 
 st.title("Encrypt / Decrypt")
 
-N_NEURONS = 128
-WEIGHT_SCALE = 1.5
+N = 128
+SCALE = 1.5
 ROUNDS = 8
 STEPS = 2
 
 @st.cache_resource
-def get_cipher(seed):
+def build_cipher(seed):
     rng = np.random.default_rng(seed)
-    net = ChaoticOscillatoryNetwork(n_neurons=N_NEURONS, weight_scale=WEIGHT_SCALE)
-    cipher = CAMCBlockCipher(net, rounds=ROUNDS, steps_per_round=STEPS)
-    return cipher
+    net = ChaoticOscillatoryNetwork(n_neurons=N, weight_scale=SCALE)
+    return CAMCBlockCipher(net, rounds=ROUNDS, steps_per_round=STEPS)
 
-col1, col2 = st.columns([1, 2], gap="large")
+seed = st.sidebar.number_input("Seed", value=42)
+mode = st.sidebar.selectbox("Mode", ["64-byte block", "32-byte + integrity"])
 
-with col1:
-    st.header("Parameters")
-    seed = st.number_input("Weight seed", value=42, min_value=0, step=1)
-    mode = st.radio("Mode", ["64-byte block (no integrity)", "32-byte + integrity pattern"])
+st.sidebar.markdown("---")
+st.sidebar.caption("Encryption and decryption use the same seed and mode.")
 
-    if mode == "32-byte + integrity pattern":
-        pattern_str = st.text_input("Integrity pattern (32 chars)", value="CHKSUM1234CHECKSABCDEFGHIJKLMNOP")
-        plaintext = st.text_area("Plaintext (32 bytes)", value="A" * 32, max_chars=32)
+cipher = build_cipher(seed)
+
+tab1, tab2 = st.tabs(["Encrypt", "Decrypt"])
+
+with tab1:
+    st.subheader("Plaintext → Ciphertext")
+    if mode == "32-byte + integrity":
+        pattern_str = st.text_input("Integrity pattern (32 bytes)", "CHKSUM1234CHECKSABCDEFGHIJKLMNOP", key="pat_enc")
+        plaintext = st.text_area("Plaintext (max 32 bytes)", "A"*32, max_chars=32, key="pt_enc")
     else:
-        plaintext = st.text_area("Plaintext (64 bytes)", value="A" * 64, max_chars=64)
+        pattern_str = None
+        plaintext = st.text_area("Plaintext (max 64 bytes)", "A"*64, max_chars=64, key="pt_enc64")
 
-    enc_btn = st.button("Encrypt", use_container_width=True)
-    dec_btn = st.button("Decrypt", use_container_width=True)
-
-with col2:
-    cipher = get_cipher(seed)
-
-    if enc_btn:
-        if mode == "32-byte + integrity pattern":
+    if st.button("Encrypt", use_container_width=True):
+        if mode == "32-byte + integrity":
             if len(pattern_str) != 32:
-                st.error("Integrity pattern must be exactly 32 characters.")
+                st.error("Integrity pattern must be exactly 32 bytes.")
             else:
-                cipher.set_integrity_pattern(pattern_str.encode())
-                pt_bytes = plaintext.encode().ljust(32)[:32]
-                ct = cipher.encrypt(pt_bytes)
-                st.session_state['ciphertext'] = ct
-                st.session_state['mode'] = 'integrity'
-                st.text_area("Ciphertext (hex)", value=ct.hex(), height=100)
+                pt = plaintext.encode().ljust(32)[:32]
+                pat = pattern_str.encode()[:32]
+                full = pt + pat
+                ct = cipher.encrypt(full)
+                st.session_state.last_ct = ct.hex()
+                st.text_area("Ciphertext", ct.hex(), height=100)
         else:
-            pt_bytes = plaintext.encode().ljust(64)[:64]
-            ct = cipher.encrypt(pt_bytes)
-            st.session_state['ciphertext'] = ct
-            st.session_state['mode'] = 'block'
-            st.text_area("Ciphertext (hex)", value=ct.hex(), height=100)
+            pt = plaintext.encode().ljust(64)[:64]
+            ct = cipher.encrypt(pt)
+            st.session_state.last_ct = ct.hex()
+            st.text_area("Ciphertext", ct.hex(), height=100)
 
-    if dec_btn and 'ciphertext' in st.session_state:
+with tab2:
+    st.subheader("Ciphertext → Plaintext")
+    ct_hex = st.text_area("Ciphertext (hex)", value=st.session_state.get("last_ct", ""), key="ct_input", height=100)
+    if mode == "32-byte + integrity":
+        pattern_str = st.text_input("Integrity pattern (32 bytes)", "CHKSUM1234CHECKSABCDEFGHIJKLMNOP", key="pat_dec")
+    else:
+        pattern_str = None
+
+    if st.button("Decrypt", use_container_width=True):
         try:
-            if st.session_state.get('mode') == 'integrity' and pattern_str:
-                cipher.set_integrity_pattern(pattern_str.encode())
-            pt = cipher.decrypt(st.session_state['ciphertext'])
-            st.text_area("Decrypted", value=pt.decode(errors='replace'), height=100)
+            ct = bytes.fromhex(ct_hex.strip())
+            if len(ct) != 64:
+                st.error("Ciphertext must be exactly 64 bytes (128 hex chars).")
+            else:
+                pt = cipher.decrypt(ct)
+                if mode == "32-byte + integrity":
+                    msg = pt[:32]
+                    pat = pt[32:]
+                    if pattern_str and pat == pattern_str.encode()[:32]:
+                        st.success("Integrity check passed.")
+                        st.text_area("Decrypted message", msg.decode(errors='replace'), height=100)
+                    else:
+                        st.error("Integrity check FAILED – ciphertext tampered or wrong key/pattern.")
+                else:
+                    st.text_area("Decrypted", pt.decode(errors='replace'), height=100)
         except ValueError as e:
-            st.error(str(e))
+            st.error(f"Decryption error: {e}")
+        except Exception as e:
+            st.error(f"Invalid hex string: {e}")

@@ -4,7 +4,7 @@ from encoding import bits_to_state, state_to_bits
 from associative import store_patterns_hebbian, recall
 
 class CAMCBlockCipher:
-    def __init__(self, network, rounds=12, steps_per_round=1):
+    def __init__(self, network, rounds=12, steps_per_round=3):
         self.network = network
         self.rounds = rounds
         self.steps_per_round = steps_per_round
@@ -58,9 +58,32 @@ class CAMCBlockCipher:
         return plain_bytes
 
     def _round_function(self, half_bits, round_idx):
-        state = bits_to_state(half_bits, self.network.n)
+        half_bytes = self._bits_to_bytes(half_bits)
+        n = self.network.n
+        repeated = (half_bytes * (n // len(half_bytes) + 1))[:n]
+        angles = np.frombuffer(repeated, dtype=np.uint8).astype(float) / 255.0 * 2 * np.pi
+        state = np.exp(1j * angles) * 0.5
         state = self.network.evolve(self.steps_per_round, initial_state=state)
-        return state_to_bits(state, 256)
+        mixed_bytes = self._phase_mixer(state, 32)
+        mixed_bits = self._bytes_to_bits(mixed_bytes)
+        return mixed_bits[:256]
+
+    def _phase_mixer(self, state, num_bytes):
+        angles = np.mod(np.angle(state), 2 * np.pi)
+        accumulator = 0x9E3779B9
+        out = bytearray()
+        n = len(state)
+        idx = 0
+        while len(out) < num_bytes:
+            angle = angles[idx % n]
+            byte_val = int((angle / (2 * np.pi)) * 256) & 0xFF
+            accumulator ^= byte_val
+            accumulator ^= (accumulator >> 7)
+            accumulator ^= (accumulator << 9)
+            accumulator &= 0xFFFFFFFF
+            out.append(accumulator & 0xFF)
+            idx += 1
+        return bytes(out)
 
     def _bytes_to_bits(self, data):
         bits = np.unpackbits(np.frombuffer(data, dtype=np.uint8))

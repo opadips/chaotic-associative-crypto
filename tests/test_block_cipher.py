@@ -6,7 +6,7 @@ from block_cipher import CAMCBlockCipher
 def test_encrypt_decrypt_roundtrip():
     n_neurons = 128
     net = ChaoticOscillatoryNetwork(n_neurons=n_neurons, weight_scale=1.5)
-    cipher = CAMCBlockCipher(net, rounds=8, steps_per_round=2)
+    cipher = CAMCBlockCipher(net, rounds=12, steps_per_round=3)
     plaintext = b"A" * 64
     encrypted = cipher.encrypt(plaintext)
     decrypted = cipher.decrypt(encrypted)
@@ -15,7 +15,7 @@ def test_encrypt_decrypt_roundtrip():
 def test_avalanche_effect():
     n_neurons = 128
     net = ChaoticOscillatoryNetwork(n_neurons=n_neurons, weight_scale=1.5)
-    cipher = CAMCBlockCipher(net, rounds=8, steps_per_round=2)
+    cipher = CAMCBlockCipher(net, rounds=12, steps_per_round=3)
     p1 = b"A" * 64
     p2 = bytearray(p1)
     p2[0] ^= 0x01
@@ -30,7 +30,7 @@ def test_avalanche_effect():
 def test_tamper_detection_fails():
     n_neurons = 128
     net = ChaoticOscillatoryNetwork(n_neurons=n_neurons, weight_scale=1.5)
-    cipher = CAMCBlockCipher(net, rounds=8, steps_per_round=2)
+    cipher = CAMCBlockCipher(net, rounds=12, steps_per_round=3)
     plaintext = b"A" * 64
     encrypted = cipher.encrypt(plaintext)
     tampered = bytearray(encrypted)
@@ -42,7 +42,7 @@ def test_tamper_detection_fails():
 def test_integrity_pattern_roundtrip():
     n_neurons = 128
     net = ChaoticOscillatoryNetwork(n_neurons=n_neurons, weight_scale=1.5)
-    cipher = CAMCBlockCipher(net, rounds=8, steps_per_round=2)
+    cipher = CAMCBlockCipher(net, rounds=12, steps_per_round=3)
     pattern = b"CHKSUM1234CHECKSABCDEFGHIJKLMNOP"
     cipher.set_integrity_pattern(pattern)
     msg_32 = b"A" * 32
@@ -53,7 +53,7 @@ def test_integrity_pattern_roundtrip():
 def test_integrity_detects_tamper():
     n_neurons = 128
     net = ChaoticOscillatoryNetwork(n_neurons=n_neurons, weight_scale=1.5)
-    cipher = CAMCBlockCipher(net, rounds=8, steps_per_round=2)
+    cipher = CAMCBlockCipher(net, rounds=12, steps_per_round=3)
     pattern = b"CHKSUM1234CHECKSABCDEFGHIJKLMNOP"
     cipher.set_integrity_pattern(pattern)
     msg_32 = b"A" * 32
